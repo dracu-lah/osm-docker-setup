@@ -1,17 +1,16 @@
 version: "3.8"
-
 services:
-  tuk_nominatim:
+  nominatim:
     image: "mediagis/nominatim:4.5"
-    container_name: tuk_nominatim
+    container_name: nominatim
     environment:
-      - "PBF_PATH=/nominatim/data/${PBF_FILE}"
+      - "PBF_PATH=/nominatim/data/osm-map.pbf"
     ports:
       - "5173:8080"
     volumes:
       - "./osm-data:/nominatim/data"
     networks:
-      - tuk_osm_network
+      - osm_network
     restart: always
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/"]
@@ -19,62 +18,54 @@ services:
       timeout: 10s
       retries: 3
 
-  tuk_osrm_extract:
+  osrm_extract:
     image: osrm/osrm-backend
-    container_name: tuk_osrm_extract
-    command: "osrm-extract -p /opt/car.lua /data/${PBF_FILE}"
+    container_name: osrm_extract
+    command: "osrm-extract -p /opt/car.lua /data/osm-map.pbf"
     volumes:
       - "./osm-data:/data"
     networks:
-      - tuk_osm_network
+      - osm_network
     restart: "no"
-    healthcheck:
-      test: ["CMD", "osrm-routed", "--version"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
-  tuk_osrm_partition:
+  osrm_partition:
     image: osrm/osrm-backend
-    container_name: tuk_osrm_partition
-    command: "osrm-partition /data/${PBF_FILE}.osrm"
+    container_name: osrm_partition
+    command: "osrm-partition /data/osm-map.osrm"
     volumes:
       - "./osm-data:/data"
     networks:
-      - tuk_osm_network
+      - osm_network
     depends_on:
-      tuk_osrm_extract:
-        condition: service_completed_successfully
+      - osrm_extract
     restart: "no"
 
-  tuk_osrm_customize:
+  osrm_customize:
     image: osrm/osrm-backend
-    container_name: tuk_osrm_customize
-    command: "osrm-customize /data/${PBF_FILE}.osrm"
+    container_name: osrm_customize
+    command: "osrm-customize /data/osm-map.osrm"
     volumes:
       - "./osm-data:/data"
     networks:
-      - tuk_osm_network
+      - osm_network
     depends_on:
-      tuk_osrm_partition:
-        condition: service_completed_successfully
+      - osrm_partition
     restart: "no"
 
-  tuk_osrm_routed:
+  osrm_routed:
     image: osrm/osrm-backend
-    container_name: tuk_osrm_routed
-    command: "osrm-routed --algorithm mld /data/${PBF_FILE}.osrm"
+    container_name: osrm_routed
+    command: "osrm-routed --algorithm mld /data/osm-map.osrm"
     ports:
       - "5000:5000"
     volumes:
       - "./osm-data:/data"
     networks:
-      - tuk_osm_network
+      - osm_network
     depends_on:
-      tuk_osrm_customize:
-        condition: service_completed_successfully
+      - osrm_customize
     restart: always
 
 networks:
-  tuk_osm_network:
+  osm_network:
     driver: bridge

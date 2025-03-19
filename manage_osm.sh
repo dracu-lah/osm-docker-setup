@@ -2,8 +2,8 @@
 
 # Define variables
 PROJECT_DIR="$(pwd)"
-OSM_URL="https://download.geofabrik.de/europe/southeast-latest.osm.pbf"
-PBF_FILE="southeast-latest.osm.pbf"
+OSM_URL="https://download.geofabrik.de/asia/india/southern-zone-latest.osm.pbf"
+OUTPUT_FILE="osm-map.pbf"
 CRON_JOB="0 0 * * * $PROJECT_DIR/manage_osm.sh update"
 LOG_FILE="$PROJECT_DIR/manage_osm.log"
 
@@ -14,6 +14,7 @@ mkdir -p osm-data
 log() {
   local message="$1"
   echo "$(date '+%Y-%m-%d %H:%M:%S') - $message" >>"$LOG_FILE"
+  echo "$(date '+%Y-%m-%d %H:%M:%S') - $message"
 }
 
 # Function to display help
@@ -32,14 +33,14 @@ show_help() {
 # Function to start Docker containers
 start_containers() {
   log "Starting Docker containers..."
-  docker-compose up -d
+  docker compose up -d
   log "Docker containers started."
 }
 
 # Function to stop Docker containers
 stop_containers() {
   log "Stopping Docker containers..."
-  docker-compose down
+  docker compose down
   log "Docker containers stopped."
 }
 
@@ -52,36 +53,51 @@ check_status() {
 # Function to update OSM data
 update_osm() {
   local url=${1:-$OSM_URL} # Use provided URL or default
+  local output_path="./osm-data/$OUTPUT_FILE"
+
   log "Updating OSM data from: $url"
-  output_path="./osm-data/$(basename "$url")"
+
+  # Stop containers if running
+  stop_containers
 
   # Download the OSM file
-  if [ ! -f "$output_path" ]; then
-    log "Downloading OSM file..."
-    if curl -o "$output_path" "$url"; then
-      log "Downloaded OSM file: $output_path"
-    else
-      log "Error downloading OSM file from $url"
-      exit 1
-    fi
+  log "Downloading OSM file..."
+  if curl -L -o "$output_path" "$url"; then
+    log "Downloaded OSM file to: $output_path"
   else
-    log "Using cached file: $output_path"
+    log "Error downloading OSM file from $url"
+    exit 1
   fi
 
-  # Set the PBF_FILE environment variable and start Docker containers
-  export PBF_FILE="$(basename "$output_path")"
+  # Start Docker containers
   start_containers
 }
 
 # Function to set up the environment and cron job
 setup_environment() {
+  log "Setting up environment..."
+
+  # Create or update the osm-data directory
+  mkdir -p osm-data
+
+  # Download initial OSM data if not exists
+  if [ ! -f "./osm-data/$OUTPUT_FILE" ]; then
+    log "Downloading initial OSM data..."
+    update_osm
+  fi
+
   # Set up cron job
   (
-    crontab -l 2>/dev/null
+    crontab -l 2>/dev/null | grep -v "$PROJECT_DIR/manage_osm.sh"
     echo "$CRON_JOB"
   ) | crontab -
   log "Cron job set to update OSM data daily at midnight."
+
+  log "Setup complete. You can now start the services."
 }
+
+# Make script executable
+chmod +x "$0"
 
 # Main script logic
 case "$1" in
@@ -104,7 +120,7 @@ help)
   show_help
   ;;
 *)
-  echo "Invalid option. Use 'help' for usage information."
+  show_help
   exit 1
   ;;
 esac
