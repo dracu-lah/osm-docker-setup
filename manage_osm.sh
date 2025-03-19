@@ -4,7 +4,6 @@
 PROJECT_DIR="$(pwd)"
 OSM_URL="https://download.geofabrik.de/asia/india/southern-zone-latest.osm.pbf"
 OUTPUT_FILE="osm-map.pbf"
-CRON_JOB="0 0 * * * $PROJECT_DIR/manage_osm.sh update"
 LOG_FILE="$PROJECT_DIR/manage_osm.log"
 
 # Create osm-data directory if it doesn't exist
@@ -25,9 +24,14 @@ show_help() {
   echo "  start       Start Docker containers."
   echo "  stop        Stop Docker containers."
   echo "  status      Check Docker container status."
-  echo "  update      Update OSM data from the specified URL."
-  echo "  setup       Set up the environment and cron job."
+  echo "  update [URL] Update OSM data from the specified URL (optional)."
+  echo "  setup       Set up the environment."
   echo "  help        Display this help message."
+  echo
+  echo "Examples:"
+  echo "  $0 setup"
+  echo "  $0 start"
+  echo "  $0 update https://download.geofabrik.de/asia/india/southern-zone-latest.osm.pbf"
 }
 
 # Function to start Docker containers
@@ -47,7 +51,7 @@ stop_containers() {
 # Function to check Docker container status
 check_status() {
   log "Checking Docker container status..."
-  docker ps
+  docker ps --filter "network=osm_network"
 }
 
 # Function to update OSM data
@@ -73,7 +77,7 @@ update_osm() {
   start_containers
 }
 
-# Function to set up the environment and cron job
+# Function to set up the environment
 setup_environment() {
   log "Setting up environment..."
 
@@ -84,16 +88,10 @@ setup_environment() {
   if [ ! -f "./osm-data/$OUTPUT_FILE" ]; then
     log "Downloading initial OSM data..."
     update_osm
+  else
+    log "OSM data file already exists, skipping download"
+    log "Setup complete. You can now start the services."
   fi
-
-  # Set up cron job
-  (
-    crontab -l 2>/dev/null | grep -v "$PROJECT_DIR/manage_osm.sh"
-    echo "$CRON_JOB"
-  ) | crontab -
-  log "Cron job set to update OSM data daily at midnight."
-
-  log "Setup complete. You can now start the services."
 }
 
 # Make script executable
@@ -116,10 +114,11 @@ update)
 setup)
   setup_environment
   ;;
-help)
+help | "")
   show_help
   ;;
 *)
+  echo "Unknown command: $1"
   show_help
   exit 1
   ;;

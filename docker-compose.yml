@@ -68,4 +68,5 @@ services:
 
 networks:
   osm_network:
+    name: osm_network
     driver: bridge
